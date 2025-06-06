@@ -91,14 +91,18 @@ class GraphTemporalEmbedding(torch.nn.Module):
         self.device = device
         assert (kernel_size - 1) // 2
 
+        # Create ModuleList for temporal convolutions
         self.tc_modules = torch.nn.ModuleList([])
-        self.gc_module = AdaGCNConv(num_nodes, seq_len, seq_len)
         for i in range(num_levels):
             dilation_size = 2 ** i
-            self.tc_modules.extend([TemporalBlock(num_nodes, num_nodes, kernel_size=kernel_size, stride=1, dilation=dilation_size,
-                                        padding=(kernel_size-1) * dilation_size // 2, dropout=dropout)])
-            # self.gc_modules.extend([AdaGCNConv(num_nodes, seq_len, seq_len)])
-        
+            self.tc_modules.extend(
+                [TemporalBlock(num_nodes, num_nodes, kernel_size=kernel_size, stride=1, dilation=dilation_size,
+                               padding=(kernel_size - 1) * dilation_size // 2, dropout=dropout)])
+
+        # Single graph convolution module used by all levels
+        self.gc_module = AdaGCNConv(num_nodes, seq_len, seq_len)
+
+        # Create edge index for the graph
         source_nodes, target_nodes = [], []
         for i in range(num_nodes):
             for j in range(num_nodes):
@@ -108,19 +112,18 @@ class GraphTemporalEmbedding(torch.nn.Module):
 
     def forward(self, x):
         # >> (bsz, seq_len, num_nodes)
-        x = x.permute(0, 2, 1) # >> (bsz, num_nodes, seq_len)
+        x = x.permute(0, 2, 1)  # >> (bsz, num_nodes, seq_len)
 
-        x = self.tc_modules[0](x) # >> (bsz, num_nodes, seq_len)
-        x = self.gc_modules[0](x.transpose(0, 1), self.edge_index).transpose(0, 1) # >> (bsz, num_nodes, seq_len)
-        # output = x
-        
+        # First level
+        x = self.tc_modules[0](x)  # >> (bsz, num_nodes, seq_len)
+        x = self.gc_module(x.transpose(0, 1), self.edge_index).transpose(0, 1)  # >> (bsz, num_nodes, seq_len)
+
+        # Subsequent levels
         for i in range(1, self.num_levels):
-            x = self.tc_modules[i](x) # >> (bsz, num_nodes, seq_len)
-            x = self.gc_module(x.transpose(0, 1), self.edge_index).transpose(0, 1) # >> (bsz, num_nodes, seq_len)
-            # output += x
+            x = self.tc_modules[i](x)  # >> (bsz, num_nodes, seq_len)
+            x = self.gc_module(x.transpose(0, 1), self.edge_index).transpose(0, 1)  # >> (bsz, num_nodes, seq_len)
 
-        # return output.transpose(1, 2) # >> (bsz, seq_len, num_nodes)
-        return x.transpose(1, 2)
+        return x.transpose(1, 2)  # >> (bsz, seq_len, num_nodes)
 
 
 class GTA(torch.nn.Module):

@@ -1,5 +1,7 @@
 import argparse
 import os
+import random
+import numpy as np
 
 from exp.exp_gta_dad import Exp_GTA_DAD
 
@@ -64,15 +66,16 @@ if args.data in data_parser.keys():
     args.num_nodes = data_info[args.features]
 
 Exp = Exp_GTA_DAD
-
 for ii in range(args.itr):
     setting = '{}_{}_ft{}_sl{}_ll{}_pl{}_nl{}_dm{}_nh{}_el{}_dl{}_df{}_at{}_eb{}_{}_{}'.format(args.model, args.data, args.features, 
                 args.seq_len, args.label_len, args.pred_len, args.num_levels,
                 args.d_model, args.n_heads, args.e_layers, args.d_layers, args.d_ff, args.attn, args.embed, args.des, ii)
-
     exp = Exp(args)
     print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
     exp.train(setting)
     
     print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
     exp.test(setting)
+
+    print('>>>>>>>extracting embeddings : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+    exp.extract_and_save_embeddings(setting)

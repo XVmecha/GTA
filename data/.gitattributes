@@ -1,0 +1,6 @@
+data/SWAT_attackdata_downsamples.csv filter=lfs diff=lfs merge=lfs -text
+data/SWAT_normaldata_downsampled.csv filter=lfs diff=lfs merge=lfs -text
+SWaT_normaldata_downsampled.csv filter=lfs diff=lfs merge=lfs -text
+SWaT_attackdata_downsampled.csv filter=lfs diff=lfs merge=lfs -text
+SWaT_attackdata_downsampled_minimal.csv filter=lfs diff=lfs merge=lfs -text
+SWaT_normaldata_downsampled_minimal.csv filter=lfs diff=lfs merge=lfs -text

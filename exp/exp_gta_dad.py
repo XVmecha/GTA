@@ -1,10 +1,13 @@
+#from anomaly_detection import find_optimal_threshold
 from data.data_loader_dad import (
     NASA_Anomaly,
     WADI,
     SWaT
 )
+import json
 from exp.exp_basic import Exp_Basic
 from models.gta import GTA
+from sklearn.metrics import f1_score, recall_score, precision_score
 
 from utils.tools import EarlyStopping, adjust_learning_rate
 from utils.metrics import metric
@@ -23,10 +26,198 @@ import time
 import warnings
 warnings.filterwarnings('ignore')
 
+
+def find_optimal_threshold(anomaly_scores, true_labels, setting, n_thresholds=100,
+                           experiment_name='experiment'):
+    """
+    Perform grid search to find optimal threshold for anomaly detection.
+
+    Parameters:
+    -----------
+    anomaly_scores : numpy.ndarray
+        Anomaly scores for each time point, shape (N,)
+    true_labels : numpy.ndarray
+        Ground truth labels (0 for normal, 1 for anomaly), shape (N,)
+    n_thresholds : int
+        Number of threshold values to try
+    save_path : str
+        Directory path to save results file
+    experiment_name : str
+        Name for the experiment (used in filename)
+
+    Returns:
+    --------
+    dict
+        Results containing best threshold, F1 score, recall, and precision
+    """
+    min_score = np.min(anomaly_scores)
+    max_score = np.max(anomaly_scores)
+    save_path = './results/' + setting + '/'
+    thresholds = np.linspace(min_score, max_score, n_thresholds)
+
+    best_f1 = 0
+    best_recall = 0
+    best_f1_threshold = None
+    best_recall_threshold = None
+    best_f1_precision = 0
+    best_recall_precision = 0
+
+    results = {
+        'thresholds': [],
+        'f1_scores': [],
+        'recall_scores': [],
+        'precision_scores': []
+    }
+
+    for threshold in thresholds:
+        # Apply threshold to get binary predictions
+        predicted_labels = (anomaly_scores > threshold).astype(int)
+
+        # Calculate metrics
+        precision = precision_score(true_labels, predicted_labels, zero_division=0)
+        recall = recall_score(true_labels, predicted_labels, zero_division=0)
+        f1 = f1_score(true_labels, predicted_labels, zero_division=0)
+
+        # Store results
+        results['thresholds'].append(float(threshold))
+        results['f1_scores'].append(float(f1))
+        results['recall_scores'].append(float(recall))
+        results['precision_scores'].append(float(precision))
+
+        # Track best F1 score
+        if f1 > best_f1:
+            best_f1 = f1
+            best_f1_recall = re
+            best_f1_threshold = threshold
+            best_f1_precision = precision
+
+        # Track best recall
+        if recall > best_recall:
+            best_recall = recall
+            best_recall_threshold = threshold
+            best_recall_precision = precision
+
+    # Create a dictionary with summary results
+    summary = {
+        'best_f1': float(best_f1),
+        'best_f1_threshold': float(best_f1_threshold),
+        'best_f1_precision': float(best_f1_precision),
+        'best_f1_recall': float(best_f1_recall),
+        'best_recall': float(best_recall),
+        'best_recall_threshold': float(best_recall_threshold),
+        'best_recall_precision': float(best_recall_precision),
+        'results': {
+            'thresholds': results['thresholds'],
+            'f1_scores': results['f1_scores'],
+            'recall_scores': results['recall_scores'],
+            'precision_scores': results['precision_scores']
+        }
+    }
+
+    # Save results to file if save_path is provided
+    if save_path:
+        # Create directory if it doesn't exist
+        os.makedirs(save_path, exist_ok=True)
+
+        # Save as JSON
+        json_path = os.path.join(save_path, f"{experiment_name}_threshold_results.json")
+        with open(json_path, 'w') as f:
+            json.dump(summary, f, indent=4)
+
+        # Save a simple text summary
+        txt_path = os.path.join(save_path, f"{experiment_name}_threshold_summary.txt")
+        with open(txt_path, 'w') as f:
+            f.write(f"Best F1 Score: {best_f1:.4f}\n")
+            f.write(f"Best F1 Threshold: {best_f1_threshold:.4f}\n")
+            f.write(f"Precision at Best F1: {best_f1_precision:.4f}\n")
+            f.write(f"Recall at Best F1: {best_f1_recall:.4f}\n\n")
+            f.write(f"Best Recall: {best_recall:.4f}\n")
+            f.write(f"Best Recall Threshold: {best_recall_threshold:.4f}\n")
+            f.write(f"Precision at Best Recall: {best_recall_precision:.4f}\n")
+
+        print(f"Results saved to {json_path} and {txt_path}")
+
+    return summary
+
 class Exp_GTA_DAD(Exp_Basic):
     def __init__(self, args):
         super(Exp_GTA_DAD, self).__init__(args)
-    
+
+    def extract_and_save_embeddings(self, setting):
+        """
+        Extract and save node embeddings and graph structure after training
+
+        Parameters
+        ----------
+        setting : str
+            Name of the experiment setting to use as filename prefix
+
+        Returns
+        ----------
+        dict
+            Dictionary containing node embeddings and graph structure
+        """
+        # Load the best model if not already loaded
+        best_model_path = f'./checkpoints/{setting}/checkpoint.pth'
+        if os.path.exists(best_model_path):
+            self.model.load_state_dict(torch.load(best_model_path))
+
+        # Set model to evaluation mode
+        self.model.eval()
+
+        # Get a batch of data to feed through the model
+        # Use validation data to generate representative embeddings
+        val_data, val_loader = self._get_data(flag='val')
+
+        # Get first batch
+        for batch_x, batch_y, batch_x_mark, batch_y_mark, batch_label in val_loader:
+            batch_x = batch_x.double().to(self.device)
+            batch_y = batch_y.double().to(self.device)
+            batch_x_mark = batch_x_mark.double().to(self.device)
+            batch_y_mark = batch_y_mark.double().to(self.device)
+            break
+
+        # Extract graph structure
+        with torch.no_grad():
+            # Get graph logits - representing edge weights
+            graph_logits = self.model.gt_embedding.gc_module.logits.detach().cpu().numpy()
+
+            # Reshape logits to adjacency matrix (num_nodes × num_nodes)
+            num_nodes = self.args.num_nodes
+            adjacency_matrix = graph_logits.reshape(num_nodes, num_nodes, 2)[:, :, 0]
+
+            # Get edge index for graph topology
+            edge_index = self.model.gt_embedding.edge_index.detach().cpu().numpy()
+
+            # Generate node embeddings by running the graph temporal embedding
+            node_embeddings = self.model.gt_embedding(batch_x).detach().cpu().numpy()
+
+            # Average embeddings across time and batch dimensions for a compact representation
+            # Shape: [batch_size, seq_len, num_nodes] -> [num_nodes, embedding_dim]
+            avg_node_embeddings = np.mean(node_embeddings, axis=(0, 1))
+
+        # Save embeddings and graph structure
+        embeddings_path = f'./results/{setting}/embeddings/'
+        if not os.path.exists(embeddings_path):
+            os.makedirs(embeddings_path)
+
+        # Save to numpy files
+        np.save(f'{embeddings_path}node_embeddings.npy', avg_node_embeddings)
+        np.save(f'{embeddings_path}adjacency_matrix.npy', adjacency_matrix)
+        np.save(f'{embeddings_path}edge_index.npy', edge_index)
+
+        # Create a dictionary with all the information
+        embeddings_dict = {
+            'node_embeddings': avg_node_embeddings,
+            'adjacency_matrix': adjacency_matrix,
+            'edge_index': edge_index,
+            'num_nodes': num_nodes
+        }
+
+        print(f"Embeddings and graph structure saved to {embeddings_path}")
+
+        return embeddings_dict
+
     def _build_model(self):
         model_dict = {
             'gta':GTA,
@@ -254,4 +445,14 @@ class Exp_GTA_DAD(Exp_Basic):
         np.save(folder_path+'true.npy', trues)
         np.save(folder_path+'label.npy', labels)
 
+        preds = preds[:,0,:]
+        trues = trues[:,0,:]
+        labels = labels[:,0]
+
+        squared_diff = np.square(trues - preds)
+        anomaly_scores = np.sum(squared_diff, axis=-1)
+
+        find_optimal_threshold(anomaly_scores,labels,setting)
         return
+
+

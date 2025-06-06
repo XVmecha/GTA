@@ -298,8 +298,9 @@ class SWaT(Dataset):
         if self.flag == 'train':
             df_raw = pd.read_csv(os.path.join(self.root_path,
                                             'SWaT_normaldata_downsampled.csv'))
+            #changed
             if self.features=='M':
-                cols_data = df_raw.columns[1:]
+                cols_data = df_raw.columns[:-2]
                 df_data = df_raw[cols_data]
             elif self.features=='S':
                 df_data = df_raw[[self.target]]
@@ -323,9 +324,9 @@ class SWaT(Dataset):
             border2 = border2s[self.set_type]
 
             df_stamp = df_raw[[' Timestamp']][border1:border2]
-
+            #changed
             if self.features=='M':
-                cols_data = df_raw.columns[1:-1]
+                cols_data = df_raw.columns[:-2]
                 df_data = df_raw[cols_data]
                 label = df_raw['Normal/Attack'].values
             elif self.features=='S':
@@ -378,7 +379,7 @@ class SWaT(Dataset):
 
 if __name__ == '__main__':
     flag = 'test'
-    dataset = NASA_Anomaly(root_path='./data/', data_path='MSL', flag=flag, size=(60, 30, 1))
+    dataset= SWaT(root_path='~/baselines/GTA/data/', flag=flag)
     print(flag, len(dataset))
     # data_loader = DataLoader(
     #         dataset,
