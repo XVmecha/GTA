@@ -67,15 +67,16 @@ if args.data in data_parser.keys():
 
 Exp = Exp_GTA_DAD
 for ii in range(args.itr):
-    setting = '{}_{}_ft{}_sl{}_ll{}_pl{}_nl{}_dm{}_nh{}_el{}_dl{}_df{}_at{}_eb{}_{}_{}'.format(args.model, args.data, args.features, 
+    seed = np.random.randint(500)
+    setting = '{}_{}_ft{}_sl{}_ll{}_pl{}_nl{}_dm{}_nh{}_el{}_dl{}_df{}_at{}_eb{}_{}_{}_seed{}'.format(args.model, args.data, args.features,
                 args.seq_len, args.label_len, args.pred_len, args.num_levels,
-                args.d_model, args.n_heads, args.e_layers, args.d_layers, args.d_ff, args.attn, args.embed, args.des, ii)
+                args.d_model, args.n_heads, args.e_layers, args.d_layers, args.d_ff, args.attn, args.embed, args.des, ii, seed)
     exp = Exp(args)
     print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
-    exp.train(setting)
+    exp.train(setting,seed)
     
     print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
     exp.test(setting)
 
     print('>>>>>>>extracting embeddings : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-    exp.extract_and_save_embeddings(setting)
+    exp.extract_and_save_embeddings(setting, seed)

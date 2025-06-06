@@ -156,11 +156,12 @@ class NASA_Anomaly(Dataset):
 
 
 class WADI(Dataset):
-    def __init__(self, root_path, flag='train', size=None, 
+    def __init__(self, root_path, random_seed, flag='train', size=None,
                  features='M', data_path='WADI_14days_downsampled.csv', 
                  target='1_AIT_001_PV', scale=True):
         # size [seq_len, label_len pred_len]
         # info
+        self.random_seed = random_seed
         if size == None:
             self.seq_len = 8*60
             self.label_len = 2*60
@@ -188,6 +189,21 @@ class WADI(Dataset):
         if self.flag == 'train':
             df_raw = pd.read_csv(os.path.join(self.root_path,
                                             'WADI_14days_downsampled.csv'))
+
+            # Use 90% of normal data for training
+            total_len = len(df_raw)
+            val_size = int(0.1 * total_len)
+            train_size = total_len - val_size
+
+            # Use random seed to determine validation segment location
+            rng = np.random.RandomState(self.random_seed)
+            max_start = total_len - val_size
+            val_start = rng.randint(0, max_start + 1)
+            val_end = val_start + val_size
+
+            # Training data is everything except the validation segment
+            train_indices = list(range(0, val_start)) + list(range(val_end, total_len))
+            df_selected = df_raw.iloc[train_indices]
             if self.features=='M':
                 cols_data = df_raw.columns[1:]
                 df_data = df_raw[cols_data]
@@ -203,9 +219,42 @@ class WADI(Dataset):
             
             self.data_x = data
             self.data_y = data
+
+        elif self.flag == 'val':
+            df_raw = pd.read_csv(os.path.join(self.root_path,
+                                              'WADI_14days_downsampled.csv'))
+
+            # Use 90% of normal data for training
+            total_len = len(df_raw)
+            val_size = int(0.1 * total_len)
+            train_size = total_len - val_size
+
+            # Use random seed to determine validation segment location
+            rng = np.random.RandomState(self.random_seed)
+            max_start = total_len - val_size
+            val_start = rng.randint(0, max_start + 1)
+            val_end = val_start + val_size
+
         else:
             df_raw = pd.read_csv(os.path.join(self.root_path,
                                             'WADI_attackdata_downsampled.csv'))
+
+            #df_selected = df_raw.iloc[train_indices]
+            if self.features == 'M':
+                cols_data = df_raw.columns[1:]
+                df_data = df_raw[cols_data]
+            elif self.features == 'S':
+                df_data = df_raw[[self.target]]
+
+            df_stamp = df_raw[['date']]
+
+            if self.scale:
+                data = scaler.fit_transform(df_data.values)
+            else:
+                data = df_data.values
+
+            self.data_x = data
+            self.data_y = data
 
             border1s = [0, 0, 0]
             border2s = [None, len(df_raw)//4, len(df_raw)]
@@ -266,11 +315,12 @@ class WADI(Dataset):
 
 
 class SWaT(Dataset):
-    def __init__(self, root_path, flag='train', size=None, 
-                 features='M', data_path='SWaT_normaldata_downsampled.csv', 
+    def __init__(self, root_path, random_seed, flag='train', size=None,
+                 features='M', data_path='SWaT_normaldata_downsampled1.csv',
                  target='FIT_101', scale=True):
         # size [seq_len, label_len pred_len]
         # info
+        self.random_seed = random_seed
         if size == None:
             self.seq_len = 8*60
             self.label_len = 2*60
@@ -295,16 +345,34 @@ class SWaT(Dataset):
 
     def __read_data__(self):
         scaler = MinMaxScaler()
+
         if self.flag == 'train':
+            # Load normal (non-attack) data
             df_raw = pd.read_csv(os.path.join(self.root_path,
-                                            'SWaT_normaldata_downsampled.csv'))
+                                              'SWaT_normaldata_downsampled1.csv'))
+
+            # Use 90% of normal data for training
+            total_len = len(df_raw)
+            val_size = int(0.1 * total_len)
+            train_size = total_len - val_size
+
+            # Use random seed to determine validation segment location
+            rng = np.random.RandomState(self.random_seed)
+            max_start = total_len - val_size
+            val_start = rng.randint(0, max_start + 1)
+            val_end = val_start + val_size
+
+            # Training data is everything except the validation segment
+            train_indices = list(range(0, val_start)) + list(range(val_end, total_len))
+            df_selected = df_raw.iloc[train_indices]
+
+            df_stamp = df_selected[[' Timestamp']]
             #changed
             if self.features=='M':
-                cols_data = df_raw.columns[:-2]
+                cols_data = df_raw.columns[1:-1]
                 df_data = df_raw[cols_data]
             elif self.features=='S':
                 df_data = df_raw[[self.target]]
-
             df_stamp = df_raw[[' Timestamp']]
             
             if self.scale:
@@ -314,19 +382,50 @@ class SWaT(Dataset):
             
             self.data_x = data
             self.data_y = data
-        else:
+
+        elif self.flag == 'val':
+            # Load normal (non-attack) data
             df_raw = pd.read_csv(os.path.join(self.root_path,
-                                            'SWaT_attackdata_downsampled.csv'))
+                                              'SWaT_normaldata_downsampled1.csv'))
 
-            border1s = [0, 0, 0]
-            border2s = [None, len(df_raw)//4, len(df_raw)]
-            border1 = border1s[self.set_type]
-            border2 = border2s[self.set_type]
+            # Use 25% of normal data for validation (contiguous segment)
+            total_len = len(df_raw)
+            val_size = int(0.1 * total_len)
 
-            df_stamp = df_raw[[' Timestamp']][border1:border2]
+            # Use same random seed to get the same validation segment as excluded from training
+            rng = np.random.RandomState(self.random_seed)
+            max_start = total_len - val_size
+            val_start = rng.randint(0, max_start + 1)
+            val_end = val_start + val_size
+
+            # Validation data is the contiguous segment
+            df_selected = df_raw.iloc[val_start:val_end]
+
+            df_stamp = df_selected[[' Timestamp']]
+
+            if self.features == 'M':
+                cols_data = df_raw.columns[1:-1]
+                df_data = df_selected[cols_data]
+            elif self.features == 'S':
+                df_data = df_selected[[self.target]]
+
+            if self.scale:
+                data = scaler.fit_transform(df_data.values)
+            else:
+                data = df_data.values
+
+            self.data_x = data
+            self.data_y = data
+
+        else:
+            #changed
+            df_raw = pd.read_csv(os.path.join(self.root_path,
+                                            'SWaT_attackdata_downsampled1.csv'))
+            df_stamp = df_raw[[' Timestamp']]
+
             #changed
             if self.features=='M':
-                cols_data = df_raw.columns[:-2]
+                cols_data = df_raw.columns[1:-1]
                 df_data = df_raw[cols_data]
                 label = df_raw['Normal/Attack'].values
             elif self.features=='S':
@@ -337,10 +436,10 @@ class SWaT(Dataset):
                 data = scaler.fit_transform(df_data.values)
             else:
                 data = df_data.values
-            
-            self.data_x = data[border1:border2]
-            self.data_y = data[border1:border2]
-            self.label = label[border1:border2]
+
+            self.data_x = data
+            self.data_y = data
+            self.label = label
         
         df_stamp[' Timestamp'] = pd.to_datetime(df_stamp[' Timestamp'])
         df_stamp['month'] = df_stamp[' Timestamp'].apply(lambda row:row.month,1)
@@ -367,6 +466,8 @@ class SWaT(Dataset):
         seq_y_mark = self.data_stamp[r_begin:r_end]
 
         if self.flag == 'train':
+            return seq_x, seq_y, seq_x_mark, seq_y_mark
+        elif self.flag == 'val':
             return seq_x, seq_y, seq_x_mark, seq_y_mark
         else:
             seq_label = self.label[s_end:r_end]

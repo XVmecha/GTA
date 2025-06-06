@@ -85,14 +85,14 @@ def find_optimal_threshold(anomaly_scores, true_labels, setting, n_thresholds=10
         results['precision_scores'].append(float(precision))
 
         # Track best F1 score
-        if f1 > best_f1:
+        if f1 >= best_f1:
             best_f1 = f1
-            best_f1_recall = re
+            best_f1_recall = recall
             best_f1_threshold = threshold
             best_f1_precision = precision
 
         # Track best recall
-        if recall > best_recall:
+        if recall >= best_recall:
             best_recall = recall
             best_recall_threshold = threshold
             best_recall_precision = precision
@@ -143,7 +143,7 @@ class Exp_GTA_DAD(Exp_Basic):
     def __init__(self, args):
         super(Exp_GTA_DAD, self).__init__(args)
 
-    def extract_and_save_embeddings(self, setting):
+    def extract_and_save_embeddings(self, setting, seed):
         """
         Extract and save node embeddings and graph structure after training
 
@@ -167,10 +167,10 @@ class Exp_GTA_DAD(Exp_Basic):
 
         # Get a batch of data to feed through the model
         # Use validation data to generate representative embeddings
-        val_data, val_loader = self._get_data(flag='val')
+        val_data, val_loader = self._get_data(seed, flag='val')
 
         # Get first batch
-        for batch_x, batch_y, batch_x_mark, batch_y_mark, batch_label in val_loader:
+        for batch_x, batch_y, batch_x_mark, batch_y_mark in val_loader:
             batch_x = batch_x.double().to(self.device)
             batch_y = batch_y.double().to(self.device)
             batch_x_mark = batch_x_mark.double().to(self.device)
@@ -245,9 +245,8 @@ class Exp_GTA_DAD(Exp_Basic):
         
         return model.double()
 
-    def _get_data(self, flag):
+    def _get_data(self, seed, flag):
         args = self.args
-
         data_dict = {
             'SMAP':NASA_Anomaly,
             'MSL':NASA_Anomaly,
@@ -263,6 +262,7 @@ class Exp_GTA_DAD(Exp_Basic):
         
         data_set = Data(
             root_path=args.root_path,
+            random_seed=seed,
             data_path=args.data_path,
             flag=flag,
             size=[args.seq_len, args.label_len, args.pred_len],
@@ -291,7 +291,7 @@ class Exp_GTA_DAD(Exp_Basic):
         self.model.eval()
         total_loss = []
 
-        for i, (batch_x,batch_y,batch_x_mark,batch_y_mark,batch_label) in enumerate(vali_loader):
+        for i, (batch_x,batch_y,batch_x_mark,batch_y_mark) in enumerate(vali_loader):
             batch_x = batch_x.double().to(self.device)
             batch_y = batch_y.double().to(self.device)
 
@@ -317,10 +317,10 @@ class Exp_GTA_DAD(Exp_Basic):
         self.model.train()
         return total_loss
         
-    def train(self, setting):
-        train_data, train_loader = self._get_data(flag = 'train')
-        vali_data, vali_loader = self._get_data(flag = 'val')
-        test_data, test_loader = self._get_data(flag = 'test')
+    def train(self, setting,seed):
+        train_data, train_loader = self._get_data(seed, flag = 'train')
+        vali_data, vali_loader = self._get_data(seed, flag = 'val')
+        test_data, test_loader = self._get_data(seed, flag = 'test')
 
         path = './checkpoints/'+setting
         if not os.path.exists(path):
@@ -375,10 +375,11 @@ class Exp_GTA_DAD(Exp_Basic):
 
             train_loss = np.average(train_loss)
             vali_loss = self.vali(vali_data, vali_loader, criterion)
-            test_loss = self.vali(test_data, test_loader, criterion)
+            #changed
+            #test_loss = self.vali(test_data, test_loader, criterion)
 
-            print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Test Loss: {4:.7f}".format(
-                epoch + 1, train_steps, train_loss, vali_loss, test_loss))
+            print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(
+                epoch + 1, train_steps, train_loss, vali_loss))
             early_stopping(vali_loss, self.model, path)
             if early_stopping.early_stop:
                 print("Early stopping")
@@ -391,8 +392,8 @@ class Exp_GTA_DAD(Exp_Basic):
         
         return self.model
 
-    def test(self, setting):
-        test_data, test_loader = self._get_data(flag='test')
+    def test(self, setting,seed=None):
+        test_data, test_loader = self._get_data(seed,flag='test')
         
         self.model.eval()
         

@@ -56,47 +56,50 @@ def downsample(data, labels, timestamps, down_len):
 
 def main():
     # Correctly load the normal and attack datasets
-    train_orig = pd.read_excel(
-        '/home/andreas/Thesis/datasets/SWAT/SWaT.A1 & A2_Dec 2015/Physical/SWaT_Dataset_Normal_v0.xlsx', skiprows=1)
-    test_orig = pd.read_excel(
-        '/home/andreas/Thesis/datasets/SWAT/SWaT.A1 & A2_Dec 2015/Physical/SWaT_Dataset_Attack_v0.xlsx', skiprows=1)
+    train_orig = pd.read_csv('~/baselines/GTA/data/raw_data/swat_train.csv',header=0)
+    test_orig = pd.read_csv('~/baselines/GTA/data/raw_data/swat_test.csv',header=0)
 
-    # Extract timestamps before any preprocessing
-    train_timestamps = train_orig[' Timestamp']
-    test_timestamps = test_orig[' Timestamp']
-
-    # Create attack labels correctly
-    train_labels = np.zeros(len(train_orig))  # Normal dataset - all zeros
-
-    # For the attack dataset, parse the "Normal/Attack" column to create binary labels
-    test_labels = test_orig['Normal/Attack'].apply(
-        lambda x: 1 if ('attack' in str(x).lower() or 'a ' in str(x).lower()) else 0
-    )
-
-    # Drop non-feature columns and attack labels
-    train = train_orig.drop(columns=[' Timestamp', 'Normal/Attack'])
-    test = test_orig.drop(columns=[' Timestamp', 'Normal/Attack'])
+    print(train_orig.shape)
+    print(test_orig.shape)
+    train = train_orig
+    test = test_orig
 
     # Fill missing values
-    train_mean = train.mean()
-    test_mean = test.mean()
+    # train_mean = train.mean()
+    # test_mean = test.mean()
+    #
+    # train = train.fillna(train_mean)
+    # test = test.fillna(test_mean)
+    #
+    # train = train.fillna(0)
+    # test = test.fillna(0)
+    print(train_orig.shape)
+    print(test_orig.shape)
 
-    train = train.fillna(train_mean)
-    test = test.fillna(test_mean)
+    train = train.rename(columns=lambda x: x.strip())
+    test = test.rename(columns=lambda x: x.strip())
 
-    train = train.fillna(0)
-    test = test.fillna(0)
+    train_labels = train.attack
+    test_labels = test.attack
+    train_timestamps = train_orig[' Timestamp']
+    test_timestamps = test_orig[' Timestamp']
+    # Drop non-feature columns and attack labels
+    train = train_orig.drop(columns=[' Timestamp', 'attack'])
+    test = test_orig.drop(columns=[' Timestamp', 'attack'])
 
     # Normalize data
-    x_train, x_test = norm(train.values, test.values)
+    #x_train, x_test = norm(train.values, test.values)
 
-    for i, col in enumerate(train.columns):
-        train.loc[:, col] = x_train[:, i]
-        test.loc[:, col] = x_test[:, i]
+    # for i, col in enumerate(train.columns):
+    #     train.loc[:, col] = x_train[:, i]
+    #     test.loc[:, col] = x_test[:, i]
 
     # Perform downsampling with timestamps
     d_train_x, d_train_labels, d_train_timestamps = downsample(train.values, train_labels, train_timestamps, 10)
     d_test_x, d_test_labels, d_test_timestamps = downsample(test.values, test_labels, test_timestamps, 10)
+
+    print(train_orig.shape)
+    print(test_orig.shape)
 
     # Create dataframes with the downsampled data
     train_df = pd.DataFrame(d_train_x, columns=train.columns)
@@ -113,15 +116,17 @@ def main():
     # Remove the first 2160 samples from training data (system stabilization period)
     # Uncomment if needed for GTA
     # train_df = train_df.iloc[2160:]
+    print(train_orig.shape)
+    print(test_orig.shape)
 
     #remove redundant columns in test set.
-    common_columns = [col for col in test_df.columns if col in train_df.columns]
-    train_df = train_df[common_columns]
-    test_df = test_df[common_columns]
+    # common_columns = [col for col in test_df.columns if col in train_df.columns]
+    # train_df = train_df[common_columns]
+    # test_df = test_df[common_columns]
 
     # Save processed data
-    train_df.to_csv('./SWaT_normaldata_downsampled.csv', index=False)
-    test_df.to_csv('./SWaT_attackdata_downsampled.csv', index=False)
+    train_df.to_csv('~/baselines/GTA/data/SWaT_normaldata_downsampled1.csv', index=False)
+    test_df.to_csv('~/baselines/GTA/data/SWaT_attackdata_downsampled1.csv', index=False)
 
     # Save feature list
     with open('./list.txt', 'w') as f:
